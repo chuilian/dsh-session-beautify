@@ -39,18 +39,57 @@ The host re-renders the sidebar whenever the session list changes, which replace
 
 ## Install
 
-```bash
-dsh plugin add /absolute/path/to/dsh-session-beautify
+> ⚠️ **Do not use `dsh plugin add`, and do not run `pnpm install` afterwards.**
+> The plugin manager command fails with `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED`;
+> and `pnpm install` recomputes `node_modules` from the lockfile, which reverts the
+> `link:` symlinks to the registry versions.
+
+### Manual registration (three places — miss any one and the next `pnpm install` drops it)
+
+**1. `~/.dsh/profiles/<profile>/package.json`** — both fields:
+
+```json
+{
+  "dependencies": {
+    "dsh-session-beautify": "link:/absolute/path/to/dsh-session-beautify"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "...the existing bundles stay as they are...",
+        "dsh-session-beautify"
+      ]
+    }
+  }
+}
 ```
 
-Restart DSH afterwards. To mount it by hand instead:
+**2. `~/.dsh/profiles/<profile>/pnpm-lock.yaml`**, in the `importers` section:
 
 ```yaml
-# the profile's cordis.patch.yml
-- insert:
-    - id: session-beautify
-      name: 'dsh-session-beautify'
+      dsh-session-beautify:
+        specifier: link:/absolute/path/to/dsh-session-beautify
+        version: link:../../plugins/dsh-session-beautify
 ```
+
+**3. `~/.dsh/profiles/<profile>/node_modules/dsh-session-beautify`** — a **relative** symlink
+into the plugin directory:
+
+```bash
+cd ~/.dsh/profiles/desktop/node_modules
+ln -s ../../../plugins/dsh-session-beautify dsh-session-beautify
+```
+
+Then restart DSH. **Do not run `pnpm install`.**
+
+### Verify after installing
+
+1. Reload the page.
+2. The right-click menu of any session row should now offer **「自定义外观」**.
+3. Pick a colour and press 「完成」 — that session's title changes colour, and it stays
+   that way after a reload.
+
+If the page says "Failed to load plugins", one of the three places above was missed.
 
 ## Use
 

@@ -40,20 +40,54 @@ div.sessionRow[data-row-key="session:<id>"]
 
 ## 安装
 
-```bash
-dsh plugin add /absolute/path/to/dsh-session-beautify
+> ⚠️ **不要用 `dsh plugin add`，装完也不要跑 `pnpm install`。**
+> 本机的插件管理器命令会报 `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED`；
+> 而 `pnpm install` 会按 lock 重算 `node_modules`，把 `link:` 软链顶回 registry 版本。
+
+### 手工登记（三处，漏一处都会被下次 `pnpm install` 顶掉）
+
+**1. `~/.dsh/profiles/<profile>/package.json`** —— 两处都要改：
+
+```json
+{
+  "dependencies": {
+    "dsh-session-beautify": "link:/absolute/path/to/dsh-session-beautify"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "...原有的 bundle 保持不变...",
+        "dsh-session-beautify"
+      ]
+    }
+  }
+}
 ```
 
-装完重启 DSH（Web profile 或桌面端）即生效。
-
-也可以直接挂载（不用 CLI）：
+**2. `~/.dsh/profiles/<profile>/pnpm-lock.yaml`** 的 `importers` 段：
 
 ```yaml
-# profile 的 cordis.patch.yml
-- insert:
-    - id: session-beautify
-      name: 'dsh-session-beautify'
+      dsh-session-beautify:
+        specifier: link:/absolute/path/to/dsh-session-beautify
+        version: link:../../plugins/dsh-session-beautify
 ```
+
+**3. `~/.dsh/profiles/<profile>/node_modules/dsh-session-beautify`** —— 指向工作区的**相对**软链：
+
+```bash
+cd ~/.dsh/profiles/desktop/node_modules
+ln -s ../../../plugins/dsh-session-beautify dsh-session-beautify
+```
+
+然后重启 DSH。**不跑 `pnpm install`。**
+
+### 安装后验证
+
+1. 刷新页面。
+2. 任意会话行的右键菜单中应出现 **「自定义外观」**。
+3. 选一个颜色点「完成」，该会话标题应变色；刷新页面后仍在。
+
+若页面显示 "Failed to load plugins"，通常是上面三处只改了一处。
 
 ## 使用
 
