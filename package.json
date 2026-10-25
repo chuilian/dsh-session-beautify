@@ -1,0 +1,51 @@
+{
+  "name": "dsh-session-beautify",
+  "version": "0.1.0",
+  "description": "会话美化插件:给 DSH 侧边栏的会话行加自定义外观(颜色 / 文字发光 / 字体粗细 / 字体阴影)。Session beautifier for the DSH sidebar: per-session title colour, glow, weight and shadow.",
+  "icon": "icon.svg",
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-rc.1"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "engines": {
+      "dsh": ">=0.2.0-rc.1"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib/**/*.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "README_EN.md",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"tests/*.test.js\"",
+    "test:core": "node --test --test-concurrency=1 \"tests/core.test.js\"",
+    "test:bundle": "node --test --test-concurrency=1 \"tests/bundle.test.js\""
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "sidebar",
+    "session",
+    "appearance"
+  ],
+  "license": "MIT"
+}

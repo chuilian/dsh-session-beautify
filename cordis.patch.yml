@@ -1,0 +1,22 @@
+# dsh-session-beautify bundle patch.
+#
+# Applied as a profile bundle layer (the `dsh.bundle.patch` manifest field) on
+# top of dsh-base, and activated by listing this package in the profile's
+# `dsh.profile.bundles`:
+#
+#   dsh plugin add /absolute/path/to/dsh-session-beautify
+#
+# The row is a bare plugin by package name. Its node half (exports ".") runs in
+# the Host process and does nothing; the `dsh.client` declaration in
+# package.json makes the browser half (exports "./client", served at
+# /plugins/dsh-session-beautify/client.js) load in the Web GUI.
+#
+# The browser half owns everything: the session context-menu entry, the
+# appearance dialog, the per-session style table (persisted in the browser under
+# "dsh.sessionBeautify.styling.v1"), and the painter that writes the styles onto
+# the host's own session rows.
+#
+# There is no config block: the plugin has no host-side settings to override.
+- insert:
+    - id: session-beautify
+      name: 'dsh-session-beautify'
