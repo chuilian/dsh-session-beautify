@@ -142,17 +142,50 @@ export function stubRow(sessionId, childCount = 5) {
 }
 
 /**
- * A fake document that serves the two selector shapes the bundle uses.
+ * A fake workspace row: the host's `data-row-key` handle plus the workspace
+ * child sequence (folder glyph, chevron, `projectText` > title, action strip).
+ * The label deliberately sits one level deeper than a session row's title, which
+ * is the shape difference the painter has to respect.
+ *
+ * @param {string} workspaceId - the workspace id; '' builds the ungrouped bucket.
+ * @param {number} [childCount] - how many children the row has.
+ * @returns {object} the fake row.
+ */
+export function stubWorkspaceRow(workspaceId, childCount = 4) {
+  const title = { tagName: "SPAN", style: stubStyle() };
+  const children = [];
+  for (let index = 0; index < childCount; index += 1) {
+    const child = { tagName: "SPAN", style: stubStyle() };
+    if (index === 2) child.children = [title];
+    else child.children = [];
+    children.push(child);
+  }
+  return {
+    getAttribute: (name) => (name === "data-row-key" ? "workspace:" + workspaceId : null),
+    children,
+    style: stubStyle(),
+    title
+  };
+}
+
+/**
+ * A fake document that serves the selector shapes the bundle uses: an exact
+ * handle, either prefix, and the combined both-prefix query.
  *
  * @param {object[]} [rows] - the rows the document contains.
  * @returns {object} the document stub.
  */
 export function stubDocument(rows = []) {
   const matches = (row, selector) => {
-    if (selector === '[data-row-key^="session:"]') return true;
-    const exact = /^\[data-row-key="(.*)"\]$/.exec(selector);
-    if (!exact) return false;
-    return row.getAttribute("data-row-key") === exact[1];
+    const key = String(row.getAttribute("data-row-key") || "");
+    return selector.split(",").some((part) => {
+      const trimmed = part.trim();
+      const prefix = /^\[data-row-key\^=(?:"|')(.*)(?:"|')\]$/.exec(trimmed);
+      if (prefix) return key.startsWith(prefix[1]);
+      const exact = /^\[data-row-key=(?:"|')(.*)(?:"|')\]$/.exec(trimmed);
+      if (exact) return key === exact[1];
+      return false;
+    });
   };
   return {
     rows,
@@ -199,14 +232,24 @@ export async function loadClient(options = {}) {
 }
 
 /**
- * A fake injected scope: records slot registrations and effects.
+ * A fake injected scope: records slot registrations, effects, menu
+ * contributions and dictionaries.
  *
+ * The bundle acquires `contextMenus` through a NESTED `scope.inject`, so this
+ * stub has to answer that too — and it deliberately does, because the nested
+ * declaration is what keeps a missing `contextMenus` from taking the session
+ * styling down with it.
+ *
+ * @param {object} [options] - `{ contextMenus: false }` omits the service, as a
+ *   host without the menu capability would.
  * @returns {object} the scope plus the recorded calls.
  */
-export function stubScope() {
+export function stubScope(options = {}) {
+  const withMenus = options.contextMenus !== false;
   const registrations = [];
   const effects = [];
   const dictionaries = [];
+  const menus = [];
   const registered = new Map();
   const scope = {
     slots: {
@@ -237,7 +280,20 @@ export function stubScope() {
     effect: (fn, label) => {
       const dispose = fn();
       effects.push({ label, dispose });
+    },
+    inject: (names, fn) => {
+      const wanted = Array.isArray(names) ? names : Object.keys(names);
+      if (wanted.includes("contextMenus") && !withMenus) return;
+      fn(scope);
     }
   };
-  return { scope, registrations, effects, dictionaries };
+  if (withMenus) {
+    scope.contextMenus = {
+      register: (contribution) => {
+        menus.push(contribution);
+        return () => {};
+      }
+    };
+  }
+  return { scope, registrations, effects, dictionaries, menus };
 }

@@ -1,41 +1,45 @@
 # dsh-session-beautify
 
-**Session beautifier** — custom appearance for the session rows in the DeepSeek Harness (DSH) sidebar.
+**Session and workspace beautifier** — custom appearance for the session rows and workspace rows in the DeepSeek Harness (DSH) sidebar.
 
-Per session, set the title's **colour / text glow / font weight / text shadow**. Styles are stored in the local browser and survive a reload.
+Per session and per workspace, set the **colour / text glow / font weight / text shadow** of the title or the workspace name. Styles are stored in the local browser and survive a reload.
 
 ---
 
 ## What it does
 
 - Right-click any session row → the menu gains a **「自定义外观」** (*Customize appearance*) entry
+- Right-click any workspace row (a project folder in the sidebar) → the same menu entry and the same dialog
 - A dialog offers colour (preset swatches / a native picker / three RGB channels), a glow slider, a font-weight choice, a shadow toggle, and a live preview
 - 「完成」 applies immediately; 「清除自定义」 restores the original look
-- Styles are stored **per session** and never bleed into one another
+- Styles are stored **per session and per workspace** and never bleed into one another (keyed by id, so renaming a workspace keeps its colour)
 - The style table is persisted in `localStorage` under `dsh.sessionBeautify.styling.v1`
 
 ## How it works
 
-DSH draws the sidebar's session rows itself. This plugin does not replace the sidebar and does not re-implement the tree. It does three things:
+DSH draws the sidebar's rows itself. This plugin does not replace the sidebar and does not re-implement the tree. It does four things:
 
 1. Registers a menu row on the host's session menu seat (`sidebar.workspaces.session.menu.item`)
-2. Mounts the dialog on the `shell.overlay` seat — never inside the menu row, because a session menu row unmounts with its menu
-3. Writes the style onto the **host's own row element** as an inline style
+2. Registers a workspace menu contribution through the shared `contextMenus` capability (target kind `workspace`)
+3. Mounts the dialog on the `shell.overlay` seat — never inside the menu row, because a session menu row unmounts with its menu
+4. Writes the style onto the **host's own row element** as an inline style
 
-Step 3 relies on the stable handle the host puts on every row:
+Step 4 relies on the stable handles the host puts on every row. The two row shapes differ, and so does the position of the label:
 
 ```
-div.sessionRow[data-row-key="session:<id>"]
-  ├─ [0] status dot
-  ├─ [1] title      ← the style goes here
-  ├─ [2] timestamp
-  ├─ [3] pinned marker
+div.sessionRow[data-row-key="session:<id>"]        div.projectRow[data-row-key="workspace:<workspaceId>"]
+  ├─ [0] status dot                                  ├─ [0] folder glyph
+  ├─ [1] title      ← session style goes here        ├─ [1] expand chevron
+  ├─ [2] timestamp                                   ├─ [2] name cell > [0] name  ← workspace style goes here
+  ├─ [3] pinned marker                               └─ [3] action strip
   └─ [4] action strip
 ```
 
-Only the title is styled, so the timestamp and the status dot keep their own colours.
+Only the label is styled, so the timestamp, the status dot and the folder glyph keep their own colours.
 
-The host re-renders the sidebar whenever the session list changes, which replaces the row elements and drops the inline style. A `MutationObserver` repaints them — but only when a session row actually enters the DOM, and only when at least one session carries a custom style.
+The host re-renders the sidebar whenever the session list changes, which replaces the row elements and drops the inline style. A `MutationObserver` repaints them — but only when a session row or workspace row actually enters the DOM, and only when at least one row carries a custom style.
+
+The workspace menu entry sits at `order: 250`: after 重命名 (100) and 在应用中打开 (200), before 删除 (300). `contextMenus` is a **nested injection**, so a host without that service loses only the workspace entry — session styling keeps working.
 
 ## Install
 
@@ -88,15 +92,17 @@ Then restart DSH. **Do not run `pnpm install`.**
 2. The right-click menu of any session row should now offer **「自定义外观」**.
 3. Pick a colour and press 「完成」 — that session's title changes colour, and it stays
    that way after a reload.
+4. Right-click a **workspace row** (e.g. `工作` / `投资`) — the same 「自定义外观」 entry is
+   there, and the workspace name changes colour.
 
 If the page says "Failed to load plugins", one of the three places above was missed.
 
 ## Use
 
-1. Right-click a session in the sidebar
+1. Right-click a session or a workspace row in the sidebar
 2. Pick 「自定义外观」
 3. Adjust colour / glow / weight / shadow — the preview below updates live
-4. Press 「完成」
+4. Press 「完成」 (「清除自定义」 restores the host look)
 
 ## Deliberately not implemented
 
@@ -107,11 +113,12 @@ If the page says "Failed to load plugins", one of the three places above was mis
 | Theme-adaptive colours | the stored value is a fixed hex, so a light/dark switch keeps the same hue |
 | A global default appearance | a session either has its own style or has none |
 | Cross-device sync | the style table is deliberately browser-local; two devices keep two independent sets |
+| A tinted workspace row | only the name is styled, so the row's hover and selection backgrounds stay the host's own |
 
 ## Development
 
 ```bash
-npm test        # 31 cases: the appearance model (pure) + the bundle contract (vm sandbox)
+npm test        # 44 cases: the appearance model (pure) + the bundle contract (vm sandbox)
 ```
 
 - `tests/core.test.js` — pure logic: the style model, normalisation rules, colour maths, writing a style onto the DOM

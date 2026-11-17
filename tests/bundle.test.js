@@ -38,7 +38,7 @@ test("the bundle requires only the frozen platform table", async () => {
   }
 });
 
-test("apply occupies exactly the two seats it documents", async () => {
+test("apply occupies exactly the seats it documents", async () => {
   const { plugin } = await loadClient();
   const { scope, registrations, effects, dictionaries } = stubScope();
 
@@ -46,15 +46,20 @@ test("apply occupies exactly the two seats it documents", async () => {
 
   assert.deepEqual(
     registrations.map((entry) => entry.hole).sort(),
-    ["shell.overlay", "sidebar.workspaces.session.menu.item"]
+    ["contextMenu.icon", "shell.overlay", "sidebar.workspaces.session.menu.item"]
   );
 
-  // Both seats are list slots, so both entries need a non-empty id.
+  // The two list slots carry an id; the keyed icon slot carries a key instead.
   for (const entry of registrations) {
-    assert.equal(typeof entry.options.id, "string");
-    assert.ok(entry.options.id.length > 0, entry.options.id + " needs an id");
-    assert.equal(entry.options.key, undefined, "a list slot must not carry a key");
     assert.equal(typeof entry.component, "function");
+    if (entry.hole === "contextMenu.icon") {
+      assert.equal(entry.options.key, plugin.WORKSPACE_ICON_KEY);
+      assert.equal(entry.options.id, undefined, "a keyed slot must not carry an id");
+    } else {
+      assert.equal(typeof entry.options.id, "string");
+      assert.ok(entry.options.id.length > 0, entry.options.id + " needs an id");
+      assert.equal(entry.options.key, undefined, "a list slot must not carry a key");
+    }
   }
 
   // The dictionaries are registered under the plugin's own namespace.
@@ -63,6 +68,57 @@ test("apply occupies exactly the two seats it documents", async () => {
 
   // The row painter is an effect, so it is torn down with the scope.
   assert.ok(effects.some((entry) => String(entry.label).includes("painter")));
+});
+
+test("the workspace menu is contributed to the shared context menu", async () => {
+  const { plugin } = await loadClient();
+  const { scope, menus } = stubScope();
+  plugin.apply({ inject: (names, fn) => fn(scope) });
+
+  assert.equal(menus.length, 1);
+  const menu = menus[0];
+  assert.equal(menu.target, "workspace");
+  assert.equal(menu.id, plugin.WORKSPACE_MENU_ID);
+  // Between 重命名 (100) / 在应用中打开 (200) and 删除 (300).
+  assert.equal(menu.order, 250);
+
+  const actions = menu.resolve({ workspaceId: "w_1", path: "/tmp/w", displayTitle: "工作" });
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].label, "自定义外观");
+  assert.equal(actions[0].icon.key, plugin.WORKSPACE_ICON_KEY);
+
+  // The ungrouped bucket has no workspace id, so it contributes nothing.
+  assert.equal(menu.resolve({ workspaceId: "", path: "/tmp" }).length, 0);
+});
+
+test("the workspace menu opens the dialog for its own workspace", async () => {
+  const { plugin } = await loadClient();
+  const { scope, menus } = stubScope();
+  plugin.apply({ inject: (names, fn) => fn(scope) });
+
+  plugin.__test.stylingInstance.actions.setWorkspaceStyle("w_1", { color: "#3fb950" });
+  const [action] = menus[0].resolve({ workspaceId: "w_1", path: "/tmp/w", displayTitle: "工作" });
+  action.run();
+
+  const dialog = plugin.__test.dialogInstance.getSnapshot().dialog;
+  assert.equal(dialog.kind, "workspace");
+  assert.equal(dialog.targetId, "w_1");
+  assert.equal(dialog.displayTitle, "工作");
+  assert.equal(dialog.initial.color, "#3fb950");
+});
+
+test("a missing contextMenus service only costs the workspace menu", async () => {
+  const { plugin } = await loadClient();
+  const { scope, registrations, menus } = stubScope({ contextMenus: false });
+  plugin.apply({ inject: (names, fn) => fn(scope) });
+
+  // The nested inject never fires, so nothing workspace-related was registered…
+  assert.equal(menus.length, 0);
+  // …while the session styling seats are still all there.
+  assert.deepEqual(
+    registrations.map((entry) => entry.hole).sort(),
+    ["shell.overlay", "sidebar.workspaces.session.menu.item"]
+  );
 });
 
 test("the menu entry sits before the delete actions", async () => {
@@ -120,13 +176,35 @@ test("the style store keeps one entry per session and removes it on null", async
   assert.equal(store.getSnapshot().styling[id], undefined);
 });
 
+test("the style store keeps workspace entries in their own table", async () => {
+  const { plugin } = await loadClient();
+  const store = plugin.__test.stylingInstance;
+  const id = "w_test";
+
+  store.actions.setWorkspaceStyle(id, { color: "#a371f7", glow: 0, weight: 500, shadow: false });
+  assert.equal(store.getSnapshot().workspaceStyling[id].color, "#a371f7");
+  // A workspace id must never leak into the session table (or the reverse).
+  assert.equal(store.getSnapshot().styling[id], undefined);
+
+  store.actions.setWorkspaceStyle(id, null);
+  assert.equal(store.getSnapshot().workspaceStyling[id], undefined);
+});
+
+test("a snapshot persisted before the workspaces feature still loads", async () => {
+  const { plugin } = await loadClient();
+  const store = plugin.__test.stylingInstance;
+  // What an older bundle wrote: only the session table exists.
+  assert.equal(typeof store.getSnapshot().styling, "object");
+  assert.equal(typeof store.getSnapshot().workspaceStyling, "object");
+});
+
 test("the dialog store opens and closes", async () => {
   const { plugin } = await loadClient();
   const store = plugin.__test.dialogInstance;
 
   assert.equal(store.getSnapshot().dialog, null);
-  store.actions.setDialog({ sessionId: "s1", initial: null });
-  assert.equal(store.getSnapshot().dialog.sessionId, "s1");
+  store.actions.setDialog({ kind: "session", targetId: "s1", initial: null });
+  assert.equal(store.getSnapshot().dialog.targetId, "s1");
   store.actions.closeDialog();
   assert.equal(store.getSnapshot().dialog, null);
 });

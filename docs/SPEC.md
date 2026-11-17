@@ -29,6 +29,23 @@ jsx("div", {
 CSS-module hashes (`JoiKIa_sessionRow`, `JoiKIa_title`, …) and change with the
 host's build, so they are never used.
 
+The workspace (project) row carries the same attribute with its own prefix:
+
+```js
+// dsh-client-ui-workspace/src/client/rows/Rows.tsx:295-302 (ProjectRow)
+jsx("div", {
+  className: clsx(Rows_module_css_default.projectRow, ...),
+  "data-row-key": `workspace:${group.key}`,
+  role: "treeitem",
+  ...
+})
+```
+
+`group.key` is the workspace id (`buildGroup(workspace.workspaceId, …)`, `tree.ts:347-350`),
+not the path — so renaming a workspace keeps its style. The ungrouped bucket's
+key is the empty string (`UNGROUPED_KEY = ''`, `tree.ts:18`), which makes its
+handle the bare `workspace:`. **That row has no workspace id and is never painted.**
+
 ### 1.2 The row's child sequence
 
 The row's children are always emitted in this order (`client.js:2304-2353`):
@@ -44,6 +61,22 @@ The row's children are always emitted in this order (`client.js:2304-2353`):
 **The title is therefore always `children[1]`.** The plugin checks that the child
 is a `SPAN` before writing to it, so a host version that reshuffles the row makes
 the plugin paint nothing rather than colour the wrong cell.
+
+### 1.2b The workspace row's child sequence
+
+`ProjectRow` emits a different sequence (`Rows.tsx:314-344`):
+
+| index | element | note |
+|---|---|---|
+| 0 | `span.slot.folder` | the folder glyph, or the open-folder variant while expanded |
+| 1 | `span.slot.chevron` | the expand triangle |
+| 2 | `span.projectText` | **wraps** the label |
+| 3 | `span.rowActions` | the menu trigger and the New Session button |
+
+The label is `children[2].children[0]`. A session row's `children[1]` is a `SPAN`
+too, so a painter that only checked "second child is a span" would silently
+colour the workspace **chevron** — `workspaceTitleElementOf` descends one level
+further and refuses a non-`SPAN` label.
 
 ### 1.3 The host already renders a timestamp
 
@@ -62,8 +95,11 @@ the host's own colour and the plugin never competes with it.
 |---|---|---|
 | `sidebar.workspaces.session.menu.item` | list | `id: "session-beautify.appearance"`, `order: 450`, `locale: NS` |
 | `shell.overlay` | list | `id: "session-beautify.overlays"`, `locale: NS`, `store: dialogSeat` |
+| `contextMenus` (target `workspace`) | client service | `id: "session-beautify.workspaceAppearance"`, `order: 250` |
+| `contextMenu.icon` | keyed | `key: "session-beautify.appearance"`, `locale: NS` |
 
-Both are list slots, so both entries carry a non-empty `id`. The menu seat's
+The two list entries carry a non-empty `id`; the keyed icon entry carries a `key`
+instead. The menu seat's
 props are `{ sessionId, displayTitle }` plus the inherited `useMenuOpenState` and
 `t` — **there is no `updatedAt` in them**, which is why the plugin never needs
 it.
@@ -86,6 +122,31 @@ The `??` prefix and the trailing `&rev=` are literal parts of that URL form, not
 a query string in the usual sense. The `rev` is a content hash: the host
 recomputes it when the file changes, and the browser is expected to pick the new
 revision up.
+
+### 1.5b The workspace extension point
+
+Workspace rows expose **no Slot seat at all** — the host renders them end to end.
+The supported extension point is the shared context-menu capability:
+
+```ts
+ctx.contextMenus.register({
+  id, target: 'workspace', order,
+  resolve: ({ workspaceId, path, displayTitle }) => MenuAction[] | Promise<MenuAction[]>,
+})
+```
+
+`ctx.contextMenus` is provided by `dsh-client-ui-context-menu`
+(`src/client/index.ts:134`) and the target family is declared by
+`dsh-client-ui-workspace`'s `ContextMenuTargetMap` augmentation
+(`src/client/contract/slots.ts`). Built-in neighbours on that family:
+`workspace.rename` (100), `open-in-app.workspace` (200), `workspace.delete` (300),
+so this plugin sits at **250** — above the destructive row.
+
+`contextMenus` is a service name like any other, and it is acquired through a
+**nested** `scope.inject(['contextMenus'], …)` inside the outer
+`ctx.inject(['slots','locale'], …)`. A single flat declaration would park the
+plugin's whole fiber on a host without that service and take session styling down
+with it; the nested form degrades to "workspace menu missing".
 
 ### 1.6 The platform module table
 
@@ -113,6 +174,11 @@ A stored entry per session id:
 { color?: string, glow?: number, weight?: number, shadow?: boolean }
 ```
 
+The same entry shape is stored per session id **and** per workspace id, in two
+tables of one store (`styling`, `workspaceStyling`). Both are read with a `|| {}`
+fallback, so a snapshot persisted before the workspaces feature existed still
+loads.
+
 Two rules, both asserted in `tests/core.test.js`:
 
 - **The fields are independent.** A user who only picks a weight gets the weight;
@@ -138,18 +204,27 @@ goes to disk.
 
 ### 2.3 Painting
 
-`paintRow(row, entry)` writes `color` / `font-weight` / `text-shadow` as inline
-properties on the title element, after clearing whatever it wrote there before
-(so 「清除自定义」 really clears).
+`writeTitleStyle(title, entry)` writes `color` / `font-weight` / `text-shadow` as
+inline properties on the label element, after clearing whatever it wrote there
+before (so 「清除自定义」 really clears). Two thin wrappers pick the right label:
+`paintRow` for a session row, `paintWorkspaceRow` for a workspace row. Dispatch
+goes through `rowKindOfKey` / `targetOfRowKey`, which read the kind from the
+`data-row-key` prefix and the entry from the matching table.
 
 A `MutationObserver` on `document.body` repaints rows when the host re-renders
 the sidebar. It is deliberately narrow:
 
-- it returns immediately unless at least one session carries a custom style;
-- it only reacts to added nodes that belong to a session row.
+- it returns immediately unless at least one row (session **or** workspace)
+  carries a custom style;
+- it only reacts to added nodes that belong to a host row.
+
+One query (`ROW_SELECTOR_ALL`, the union of the two prefixes) serves the full
+repaint, the observer and the unload cleanup, so none of them walks the document
+twice.
 
 When the plugin is torn down the observer is stopped and every row's inline style
-is removed, so the host's rows go back to looking untouched.
+is removed — each kind through its own label lookup, so a workspace unload clears
+the name and not the chevron.
 
 ---
 
@@ -158,6 +233,7 @@ is removed, so the host's rows go back to looking untouched.
 | Not done | Reason |
 |---|---|
 | Replacing the sidebar | the plugin never takes the `sidebar.workspaces` seat; it only decorates what the host draws |
+| A tinted workspace row | only the name is styled; the row's hover and selection backgrounds stay the host's |
 | An icon for a session row | the leading cell is the official status dot |
 | Font outline | a text stroke bleeds into the timestamp cell and needs an extra reset rule |
 | Theme-adaptive colours | a stored value is a fixed hex |
@@ -172,6 +248,8 @@ is removed, so the host's rows go back to looking untouched.
 |---|---|
 | The `slots` service never arrives | the plugin registers nothing and does not throw; the host's sidebar is untouched |
 | The `locale` service never arrives | the plugin falls back to its own built-in translator |
+| The `contextMenus` service never arrives | the nested inject never fires: no workspace menu, session styling unaffected |
+| The `contextMenu.icon` keyed seat is refused | the menu entry is registered first and still works without a glyph |
 | The host renames `data-row-key` | the plugin paints nothing and logs one warning to the console naming the attribute it looked for |
 | The host reshuffles the row's children | `titleElementOf` refuses a child that is not a `SPAN`; nothing is painted |
 | The browser has no `localStorage` | the host's store already degrades; the styles simply do not survive a reload |
@@ -183,9 +261,9 @@ is removed, so the host's rows go back to looking untouched.
 
 | File | Technique | Covers |
 |---|---|---|
-| `tests/core.test.js` | pure functions, plus a fake DOM | the style model, normalisation, colour maths, `titleElementOf`, `paintRow`, dictionary key parity |
-| `tests/bundle.test.js` | the real bundle in a `node:vm` sandbox with a stub loader | the module id, the platform-module whitelist, the seat registrations and their kinds, inertness without services, the two stores' persistence |
-| `tests/helpers.js` | — | the loader harness, the React / primitives / store stubs, the fake DOM |
+| `tests/core.test.js` | pure functions, plus a fake DOM | the style model, normalisation, colour maths, both label lookups, both painters, key dispatch, a full two-shape repaint, dictionary key parity |
+| `tests/bundle.test.js` | the real bundle in a `node:vm` sandbox with a stub loader | the module id, the platform-module whitelist, the seat registrations and their kinds, the workspace menu contribution (target / order / actions), inertness without services, degradation without `contextMenus`, the stores' persistence |
+| `tests/helpers.js` | — | the loader harness, the React / primitives / store stubs, the fake DOM, both row shapes, the scope with and without `contextMenus` |
 
 There is no React render test: the dialog is a thin wrapper over the pure model,
 and `tests/core.test.js` covers the model directly.

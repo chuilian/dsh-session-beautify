@@ -10,12 +10,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadClient, stubDocument, stubRow } from "./helpers.js";
+import { loadClient, stubDocument, stubRow, stubWorkspaceRow } from "./helpers.js";
 
 /** Load the bundle once; the pure surface never changes between tests. */
 const { plugin } = await loadClient();
-const { toRowStyle, normalizeEntry, colorToRgb, rgbToHex, escapeForSelector, titleElementOf, paintRow } =
-  plugin.__test;
+const {
+  toRowStyle,
+  normalizeEntry,
+  colorToRgb,
+  rgbToHex,
+  escapeForSelector,
+  titleElementOf,
+  paintRow,
+  workspaceTitleElementOf,
+  paintWorkspaceRow,
+  targetOfRowKey
+} = plugin.__test;
 
 test("toRowStyle returns null when there is nothing to apply", () => {
   assert.equal(toRowStyle(null), null);
@@ -167,4 +177,109 @@ test("the Chinese and English dictionaries carry the same key set", () => {
   const { zh, en } = plugin.__test.dictionaries;
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort());
   assert.ok(Object.keys(zh).length > 10);
+});
+
+test("workspaceTitleElementOf picks the label inside projectText", () => {
+  const row = stubWorkspaceRow("w_1");
+  // Third child (projectText) → its first child (the label).
+  assert.equal(workspaceTitleElementOf(row), row.children[2].children[0]);
+  // A session row must not be addressable through the workspace shape.
+  assert.equal(workspaceTitleElementOf(stubRow("s1")), null);
+  assert.equal(workspaceTitleElementOf(null), null);
+  assert.equal(workspaceTitleElementOf(stubWorkspaceRow("w_1", 2)), null);
+
+  const broken = stubWorkspaceRow("w_1");
+  broken.children[2].children[0] = { tagName: "DIV", style: {} };
+  assert.equal(workspaceTitleElementOf(broken), null);
+});
+
+test("paintWorkspaceRow writes the label style and leaves the glyph cells alone", () => {
+  const row = stubWorkspaceRow("w_1");
+  const painted = paintWorkspaceRow(row, { color: "#a371f7", glow: 0, weight: 700, shadow: false });
+
+  assert.equal(painted, true);
+  const label = row.children[2].children[0];
+  assert.equal(label.style.getPropertyValue("color"), "#a371f7");
+  assert.equal(label.style.getPropertyValue("font-weight"), "700");
+  // The folder glyph and the chevron keep their own colours.
+  assert.equal(row.children[0].style.getPropertyValue("color"), "");
+  assert.equal(row.children[1].style.getPropertyValue("color"), "");
+});
+
+test("paintWorkspaceRow clears what it wrote before when the entry is empty", () => {
+  const row = stubWorkspaceRow("w_1");
+  paintWorkspaceRow(row, { color: "#a371f7", weight: 700 });
+  assert.equal(paintWorkspaceRow(row, null), false);
+  const label = row.children[2].children[0];
+  assert.equal(label.style.getPropertyValue("color"), "");
+  assert.equal(label.style.getPropertyValue("font-weight"), "");
+});
+
+test("paintWorkspaceRow reports failure for a row it cannot address", () => {
+  assert.equal(paintWorkspaceRow(null, { color: "#a371f7" }), false);
+  assert.equal(paintWorkspaceRow(stubWorkspaceRow("w_1", 2), { color: "#a371f7" }), false);
+});
+
+test("targetOfRowKey tells the two row kinds apart and skips the ungrouped bucket", () => {
+  const styling = plugin.__test.stylingInstance;
+  styling.actions.setStyle("s_1", { color: "#5b8def" });
+  styling.actions.setWorkspaceStyle("w_1", { color: "#3fb950" });
+
+  const session = targetOfRowKey("session:s_1");
+  assert.equal(session.kind, "session");
+  assert.equal(session.id, "s_1");
+  assert.equal(session.entry.color, "#5b8def");
+
+  const workspace = targetOfRowKey("workspace:w_1");
+  assert.equal(workspace.kind, "workspace");
+  assert.equal(workspace.id, "w_1");
+  assert.equal(workspace.entry.color, "#3fb950");
+
+  // The ungrouped bucket's handle is the bare prefix: no id, nothing to paint.
+  assert.equal(targetOfRowKey("workspace:"), null);
+  assert.equal(targetOfRowKey("session:"), null);
+  assert.equal(targetOfRowKey("overflow:abc"), null);
+
+  styling.actions.setStyle("s_1", null);
+  styling.actions.setWorkspaceStyle("w_1", null);
+});
+
+test("a full repaint covers both row shapes", async () => {
+  const session = stubRow("s_1");
+  const workspace = stubWorkspaceRow("w_1");
+  const { plugin: withDoc } = await loadClient({ document: stubDocument([session, workspace]) });
+
+  withDoc.__test.stylingInstance.actions.setStyle("s_1", { color: "#5b8def" });
+  withDoc.__test.stylingInstance.actions.setWorkspaceStyle("w_1", { color: "#3fb950" });
+  withDoc.__test.paintAllRows();
+
+  assert.equal(session.children[1].style.getPropertyValue("color"), "#5b8def");
+  assert.equal(workspace.children[2].children[0].style.getPropertyValue("color"), "#3fb950");
+
+  // Unloading hands both shapes back untouched.
+  withDoc.__test.clearAllRows();
+  assert.equal(session.children[1].style.getPropertyValue("color"), "");
+  assert.equal(workspace.children[2].children[0].style.getPropertyValue("color"), "");
+});
+
+test("applyWorkspaceStyle stores the entry and paints the row at once", async () => {
+  const workspace = stubWorkspaceRow("w_9");
+  const { plugin: withDoc } = await loadClient({ document: stubDocument([workspace]) });
+
+  withDoc.__test.applyWorkspaceStyle("w_9", { color: "#f85149", glow: 0, weight: 600, shadow: false });
+  assert.equal(withDoc.__test.stylingInstance.getSnapshot().workspaceStyling.w_9.color, "#f85149");
+  assert.equal(workspace.children[2].children[0].style.getPropertyValue("color"), "#f85149");
+  // The observer must wake up for workspace-only styles too.
+  assert.equal(withDoc.__test.refreshPaintNeeded(), true);
+
+  withDoc.__test.applyWorkspaceStyle("w_9", null);
+  assert.equal(withDoc.__test.refreshPaintNeeded(), false);
+  assert.equal(workspace.children[2].children[0].style.getPropertyValue("color"), "");
+});
+
+test("workspaceRowElementOf finds the host workspace row by its handle", async () => {
+  const workspace = stubWorkspaceRow("w_abc123");
+  const { plugin: withDoc } = await loadClient({ document: stubDocument([workspace]) });
+  assert.equal(withDoc.__test.workspaceRowElementOf("w_abc123"), workspace);
+  assert.equal(withDoc.__test.workspaceRowElementOf("missing"), null);
 });

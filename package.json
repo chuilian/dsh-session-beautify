@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-beautify",
-  "version": "0.1.0",
-  "description": "会话美化插件:给 DSH 侧边栏的会话行加自定义外观(颜色 / 文字发光 / 字体粗细 / 字体阴影)。Session beautifier for the DSH sidebar: per-session title colour, glow, weight and shadow.",
+  "version": "0.2.0",
+  "description": "会话美化插件:给 DSH 侧边栏的会话行和工作区行加自定义外观(颜色 / 文字发光 / 字体粗细 / 字体阴影)。Session and workspace beautifier for the DSH sidebar: per-row title colour, glow, weight and shadow.",
   "icon": "icon.svg",
   "type": "module",
   "engines": {
@@ -45,6 +45,7 @@
     "dsh-plugin",
     "sidebar",
     "session",
+    "workspace",
     "appearance"
   ],
   "license": "MIT"
