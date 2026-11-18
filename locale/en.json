@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session appearance",
+    "description": "Sets the colour, text glow, font weight and text shadow of each session title and each workspace name in the DSH sidebar."
+  }
+}

@@ -43,12 +43,24 @@ The workspace menu entry sits at `order: 250`: after 重命名 (100) and 在应�
 
 ## Install
 
-> ⚠️ **Do not use `dsh plugin add`, and do not run `pnpm install` afterwards.**
-> The plugin manager command fails with `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED`;
-> and `pnpm install` recomputes `node_modules` from the lockfile, which reverts the
-> `link:` symlinks to the registry versions.
+### From GitHub (recommended)
 
-### Manual registration (three places — miss any one and the next `pnpm install` drops it)
+```bash
+dsh plugin --profile <profile> add github:chuilian/dsh-session-beautify
+```
+
+You can also enter the same source in the Web GUI's plugin manager. Reload the page
+after installing.
+
+### From a source directory (development)
+
+```bash
+git clone https://github.com/chuilian/dsh-session-beautify.git
+dsh plugin --profile <profile> add link:/absolute/path/to/dsh-session-beautify
+```
+
+With `link:`, the registration lives in three places — miss any one and the next
+`pnpm install` drops it:
 
 **1. `~/.dsh/profiles/<profile>/package.json`** — both fields:
 
@@ -80,11 +92,18 @@ The workspace menu entry sits at `order: 250`: after 重命名 (100) and 在应�
 into the plugin directory:
 
 ```bash
-cd ~/.dsh/profiles/desktop/node_modules
+cd ~/.dsh/profiles/<profile>/node_modules
 ln -s ../../../plugins/dsh-session-beautify dsh-session-beautify
 ```
 
-Then restart DSH. **Do not run `pnpm install`.**
+Check all three, then restart DSH.
+
+> ⚠️ **Do not run `pnpm install` in the same profile afterwards.**
+> It recomputes `node_modules` from the lockfile, which reverts the `link:` symlinks
+> to the registry versions. If your plugin manager reports
+> `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED` (the `minimumReleaseAge` policy
+> without a `no handleResolutionPolicyViolations` callback), register the three places
+> above by hand instead.
 
 ### Verify after installing
 
@@ -92,10 +111,11 @@ Then restart DSH. **Do not run `pnpm install`.**
 2. The right-click menu of any session row should now offer **「自定义外观」**.
 3. Pick a colour and press 「完成」 — that session's title changes colour, and it stays
    that way after a reload.
-4. Right-click a **workspace row** (e.g. `工作` / `投资`) — the same 「自定义外观」 entry is
+4. Right-click a **workspace row** — the same 「自定义外观」 entry is
    there, and the workspace name changes colour.
 
 If the page says "Failed to load plugins", one of the three places above was missed.
+
 
 ## Use
 

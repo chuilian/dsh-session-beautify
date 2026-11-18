@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-beautify",
   "version": "0.2.0",
-  "description": "会话美化插件:给 DSH 侧边栏的会话行和工作区行加自定义外观(颜色 / 文字发光 / 字体粗细 / 字体阴影)。Session and workspace beautifier for the DSH sidebar: per-row title colour, glow, weight and shadow.",
+  "description": "Sidebar appearance for DSH: per-session and per-workspace title colour, text glow, font weight and text shadow, kept in the browser. · DSH 侧边栏美化：给每个会话标题与每个工作区名称单独设置颜色、文字发光、字体粗细与文字阴影。",
   "icon": "icon.svg",
   "type": "module",
   "engines": {
@@ -12,7 +12,9 @@
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "dsh": {
     "manifestVersion": 1,
@@ -32,7 +34,9 @@
     "icon.svg",
     "README.md",
     "README_EN.md",
-    "docs"
+    "docs",
+    "locale/*.json",
+    "assets/*.png"
   ],
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/*.test.js\"",
@@ -48,5 +52,13 @@
     "workspace",
     "appearance"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chuilian/dsh-session-beautify.git"
+  },
+  "homepage": "https://github.com/chuilian/dsh-session-beautify#readme",
+  "bugs": {
+    "url": "https://github.com/chuilian/dsh-session-beautify/issues"
+  }
 }

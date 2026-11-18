@@ -4,6 +4,10 @@
 
 给每个会话的标题、每个工作区的名称单独设置**颜色 / 文字发光 / 字体粗细 / 字体阴影**。样式保存在本机浏览器里，刷新不丢。
 
+Sets the colour, text glow, font weight and text shadow of each session title and
+each workspace name in the sidebar. Every row keeps its own style, stored in the
+browser and applied again after each reload.
+
 ---
 
 ## 它做什么
@@ -45,11 +49,22 @@ div.sessionRow[data-row-key="session:<id>"]        div.projectRow[data-row-key="
 
 ## 安装
 
-> ⚠️ **不要用 `dsh plugin add`，装完也不要跑 `pnpm install`。**
-> 本机的插件管理器命令会报 `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED`；
-> 而 `pnpm install` 会按 lock 重算 `node_modules`，把 `link:` 软链顶回 registry 版本。
+### 方式一：从 GitHub 安装（推荐）
 
-### 手工登记（三处，漏一处都会被下次 `pnpm install` 顶掉）
+```bash
+dsh plugin --profile <profile> add github:chuilian/dsh-session-beautify
+```
+
+也可以在 Web GUI 的插件管理器里填同一个来源。安装完成后刷新页面即可。
+
+### 方式二：从源码目录安装（开发用）
+
+```bash
+git clone https://github.com/chuilian/dsh-session-beautify.git
+dsh plugin --profile <profile> add link:/absolute/path/to/dsh-session-beautify
+```
+
+`link:` 方式的登记分散在三处，漏改任何一处都会被下次 `pnpm install` 顶掉：
 
 **1. `~/.dsh/profiles/<profile>/package.json`** —— 两处都要改：
 
@@ -77,23 +92,30 @@ div.sessionRow[data-row-key="session:<id>"]        div.projectRow[data-row-key="
         version: link:../../plugins/dsh-session-beautify
 ```
 
-**3. `~/.dsh/profiles/<profile>/node_modules/dsh-session-beautify`** —— 指向工作区的**相对**软链：
+**3. `~/.dsh/profiles/<profile>/node_modules/dsh-session-beautify`** —— 指向源码目录的**相对**软链：
 
 ```bash
-cd ~/.dsh/profiles/desktop/node_modules
+cd ~/.dsh/profiles/<profile>/node_modules
 ln -s ../../../plugins/dsh-session-beautify dsh-session-beautify
 ```
 
-然后重启 DSH。**不跑 `pnpm install`。**
+改完按上面三处逐条核对，再重启 DSH。
+
+> ⚠️ **装完之后不要在同一个 profile 里跑 `pnpm install`。**
+> 它会按 lock 重算 `node_modules`，把 `link:` 软链顶回 registry 版本。
+> 如果你的插件管理器报 `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED`
+> （`minimumReleaseAge` 策略缺 `no handleResolutionPolicyViolations` 回调），
+> 用上面的方式二手工登记即可绕过。
 
 ### 安装后验证
 
 1. 刷新页面。
 2. 任意会话行的右键菜单中应出现 **「自定义外观」**。
 3. 选一个颜色点「完成」，该会话标题应变色；刷新页面后仍在。
-4. 右键侧栏里的**工作区行**（如 `工作` / `投资`），菜单里同样有「自定义外观」，选中后该工作区名称变色。
+4. 右键侧栏里的**工作区行**，菜单里同样有「自定义外观」，选中后该工作区名称变色。
 
 若页面显示 "Failed to load plugins"，通常是上面三处只改了一处。
+
 
 ## 使用
 
