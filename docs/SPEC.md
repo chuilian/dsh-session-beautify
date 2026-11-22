@@ -112,16 +112,19 @@ The host lists the plugin in the boot manifest and serves the browser half from:
 /plugins/??<comma-separated package list>/client.js&rev=<content hash>
 ```
 
-Observed on a live host:
+A request for the current bundle looks like this (the bracketed values are
+placeholders the host fills in at request time):
 
 ```
-/plugins/??dsh-session-beautify/client.js&rev=d793cba6cc97   →  200, 36325 bytes
+/plugins/??dsh-session-beautify/client.js&rev=<content hash>   →  200, <bundle size> bytes
 ```
 
 The `??` prefix and the trailing `&rev=` are literal parts of that URL form, not
-a query string in the usual sense. The `rev` is a content hash: the host
-recomputes it when the file changes, and the browser is expected to pick the new
-revision up.
+a query string in the usual sense. The `rev` is a content hash the host computes
+from the current `lib/client.js`, and the byte count is the size of that same
+bundle at the time of the request; both change with every client edit. Treat them
+as observations of a single build, not permanent values — do not hard-code a
+particular `rev` or byte count in documentation, checks, or scripts.
 
 ### 1.5b The workspace extension point
 
@@ -247,7 +250,7 @@ the name and not the chevron.
 | Situation | Behaviour |
 |---|---|
 | The `slots` service never arrives | the plugin registers nothing and does not throw; the host's sidebar is untouched |
-| The `locale` service never arrives | the plugin falls back to its own built-in translator |
+| The `locale` service never arrives | the plugin registers nothing, same as when `slots` is missing; its built-in translator is never used as a fallback |
 | The `contextMenus` service never arrives | the nested inject never fires: no workspace menu, session styling unaffected |
 | The `contextMenu.icon` keyed seat is refused | the menu entry is registered first and still works without a glyph |
 | The host renames `data-row-key` | the plugin paints nothing and logs one warning to the console naming the attribute it looked for |
