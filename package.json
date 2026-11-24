@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-beautify",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Sidebar appearance for DSH: per-session and per-workspace title colour, text glow, font weight and text shadow, kept in the browser. · DSH 侧边栏美化：给每个会话标题与每个工作区名称单独设置颜色、文字发光、字体粗细与文字阴影。",
   "icon": "assets/icon-180.png",
   "type": "module",
